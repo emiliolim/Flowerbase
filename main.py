@@ -19,6 +19,8 @@ read all of it
 For this program I will be using a test data template from Kaggle as a
 base for the functions I will create
 
+Note for future self: create unit tests for remaining functions
+
 """
 from datetime import date
 
@@ -33,15 +35,18 @@ MONTHS = {
     'Jul': 7, 'Aug': 8, 'Sep': 9, 'Oct': 10, 'Nov': 11, 'Dec': 12,
 }
 
+
 class DataNotFound(Exception):
-    pass
+    def __init__(self):
+        message = f"No data is found for the given parameters"
+        super().__init__(message)
 
 
 @dataclass
 class FlowerDataBase:
     filename: str = None
     file_import: pd.DataFrame = None
-    connection: sql.Connection = sql.connect('flowershopdata.sqllite3')
+    connection: sql.Connection = sql.connect('flowershopdata.sqlite')
 
     def import_file(self):
         """
@@ -96,53 +101,109 @@ class FlowerDataBase:
                                           client_name, client_phone))
             conn.commit()
 
-    def daily_report(self):
+    def daily_report(self, specify_year=None, client_history=None):
         with self.connection as con:
-            cur = con.cursor()
-            cur.execute('SELECT * FROM flowershopdata')
-            rows = cur.fetchall()
             sales_over_time = {}
+
+            if client_history is None:
+                rows = self._fetch_table(con)
+            else:
+                rows = client_history
+
             for row in rows:
                 sale_date = dt.datetime.strptime(row[5], '%Y-%m-%d').date()
                 month = sale_date.month
                 year = sale_date.year
                 day = sale_date.day
                 sale_date = dt.date(year, month, day)
-                if sale_date not in sales_over_time:
-                    sales_over_time[sale_date] = 1
-                else:
-                    sales_over_time[sale_date] += 1
-            if len(sales_over_time) > 0:
-                self._visualize_sales(sales_over_time, "Daily")
+                self._add_sale(sale_date=sale_date,
+                               sales=sales_over_time,
+                               specify_year=specify_year)
+            self._visualize_report(sales=sales_over_time,
+                                   specify_year=specify_year,
+                                   interval="Daily")
 
-    def look_up_client(self):
-        """Using user input, queries DB for a clients past buying history"""
-        pass
-
-    def monthly_report(self, specify_year=2016):  # should be int
+    def monthly_report(self, specify_year=None, client_history=None):
         """
         Uses visualize_sales() function to visualize monthly data of sales
         Also gives information of client past buying history
         """
         with self.connection as con:
-            cur = con.cursor()
-            cur.execute('SELECT * FROM flowershopdata')
-            rows = cur.fetchall()
             monthly_sales = {}
-
+            if client_history is None:
+                rows = self._fetch_table(con)
+            else:
+                rows = client_history
             # populate dictionary with date values
             for row in rows:
                 sale_date = dt.datetime.strptime(row[5], '%Y-%m-%d').date()
                 month = sale_date.month
                 year = sale_date.year
-                if year == specify_year:
-                    first_of_month = dt.datetime(year, month, 1)
-                    if first_of_month not in monthly_sales:
-                        monthly_sales[first_of_month] = 1
-                    else:
-                        monthly_sales[first_of_month] += 1
-            if len(monthly_sales) > 0:
-                self._visualize_sales(monthly_sales, f"{specify_year} Monthly")
+                first_of_month = dt.datetime(year, month, 1)
+                self._add_sale(sale_date=first_of_month,
+                               sales=monthly_sales,
+                               specify_year=specify_year)
+
+            self._visualize_report(sales=monthly_sales,
+                                   specify_year=specify_year,
+                                   interval="Monthly")
+
+    def _visualize_report(self, sales: dict, specify_year: int, interval: str):
+        """
+        Helper function for creating reports that basically edits the title
+        of the sales table given the specify_year and time interval
+
+        Exception is raised when the year specified does not have
+        matching data
+        """
+        if len(sales) > 0 and specify_year is not None:
+            self._visualize_sales(sales, f"{specify_year} {interval}")
+        elif len(sales) > 0 and specify_year is None:
+            self._visualize_sales(sales, f"{interval}")
+        else:
+            raise DataNotFound()
+
+    @staticmethod
+    def _add_sale(sale_date: dt.date, sales: dict, specify_year: int):
+        """
+        Helper function for creating reports for sales
+        Updates given sales dictionary using (key: value) pair of
+        (date: number of sales)
+        Updates the sales dictionary based on the year specified by user
+        """
+        year = sale_date.year
+        if specify_year is not None:
+            if year == specify_year:
+                if sale_date not in sales:
+                    sales[sale_date] = 1
+                else:
+                    sales[sale_date] += 1
+        else:
+            if sale_date not in sales:
+                sales[sale_date] = 1
+            else:
+                sales[sale_date] += 1
+
+    def look_up_client(self, client_search: str, time_interval="daily",
+                       specify_year=None):
+        """Using user input, queries DB for a clients past buying history
+        Returns dictionary of all client sales in the past
+        Uses _visualize_data Function to generate a graph of sales history"""
+        with self.connection as con:
+            table_rows = self._fetch_table(con)
+            client_history = []
+
+            for row in table_rows:
+                client_name = row[6]
+                if client_name == client_search:
+                    client_history.append(row)
+            if time_interval == 'monthly':
+                self.monthly_report(client_history=client_history,
+                                    specify_year=specify_year)
+            else:
+                self.daily_report(client_history=client_history,
+                                  specify_year=specify_year)
+            return client_history
 
     def quarterly_report(self):
         """Uses visualize_sales() function to visualize quarterly
@@ -159,6 +220,12 @@ class FlowerDataBase:
         pass
 
     @staticmethod
+    def _fetch_table(con):
+        cur = con.cursor()
+        cur.execute('SELECT * FROM flowershopdata')
+        return cur.fetchall()
+
+    @staticmethod
     def _visualize_sales(sales_over_time,
                          specify_title="No specification"):
         """Visualizes sales data using matplotlib"""
@@ -170,7 +237,6 @@ class FlowerDataBase:
         # defining width of bars in bar graph
         total_dates = len(dates)
         bar_width = 0.8
-        bar_edge = None
         if total_dates < 12:
             bar_width = 5
         elif total_dates < 25:
@@ -212,7 +278,10 @@ def main():
     file.import_file()
     file.convert_file()
     file.daily_report()
-    #file.monthly_report(2016)
+    #file.monthly_report()
+    #print(file.look_up_client("Izaiah Levine",
+                              #time_interval="monthly",
+                              #specify_year=2016))
 
 
 if __name__ == '__main__':
