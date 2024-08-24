@@ -42,6 +42,11 @@ class DataNotFound(Exception):
         message = f"No data is found for the given parameters"
         super().__init__(message)
 
+class ImproperDataFormat(Exception):
+    def __init__(self):
+        message = "Improper data format within the given parameters"
+        super().__init__(message)
+
 
 @dataclass
 class FlowerDataBase:
@@ -244,15 +249,41 @@ class FlowerDataBase:
             elif time_interval == 'quarterly':
                 self.quarterly_report(client_history=client_history,
                                       specify_year=specify_year)
+            elif time_interval == 'yearly':
+                self.yearly_report(client_history=client_history,
+                                   specify_year=specify_year)
             else:
                 self.daily_report(client_history=client_history,
                                   specify_year=specify_year)
 
             return client_history
 
-    def add_new_sale(self):
+    def add_new_sale(self, name: str, description: str, needs: str,
+                     season: str, status: str, date: dt.date, client_name: str,
+                     client_phone_number: str):
         """Queries DB for sales data and adds new sale(s)
         Linked list of sales(s)?"""
+        with self.connection as con:
+            if type(date) is not dt.date:
+                # must be dt format due to other functions
+                raise ImproperDataFormat()
+
+            cur = con.cursor()
+            query = ("INSERT INTO flowershopdata(Name, Description,"
+                     "Needs, Season, Status, Date, Client_Name, "
+                     "Client_phone_number) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+
+            val = (name, description, needs, season, status, date, client_name,
+                   client_phone_number)
+            cur.execute(query, val)
+            con.commit()
+
+    def void_sale(self, client_name):
+        """
+        Uses look_up_client() function to obtain client history
+        User is presented with sale(s)
+        Then selected history will be removed
+        """
         pass
 
     def _visualize_report(self, sales: dict, specify_year: int, interval: str):
@@ -354,11 +385,14 @@ def main():
     file.convert_file()
     #file.daily_report()
     #file.monthly_report()
-    '''print(file.look_up_client("Izaiah Levine",
-                              time_interval="quarterly",
-                              specify_year=2016))'''
+    print(file.look_up_client("Izaiah Levine",
+                              time_interval="yearly",
+                              specify_year=2016))
     #file.quarterly_report(2016)
-    file.yearly_report(2016)
+    #file.yearly_report(2016)
+    file.add_new_sale("Poppy", "A poppy", "Needs well drained soil",
+                      "Blooms mid Spring", "Sold", dt.date(2016, 4, 14),
+                      "Meep Moop", "(800) 888-8888")
     file.close_file()
 
 
