@@ -23,6 +23,7 @@ Note for future self: create unit tests for remaining functions
 
 """
 from datetime import date
+from os import path
 
 import pandas as pd
 import sqlite3 as sql
@@ -54,17 +55,23 @@ class FlowerDataBase:
         ***MUST*** include .csv or .sql extension
         """
         try:
-            self.file_import = pd.read_csv(self.filename)
-            return True
+            if path.exists(self.filename):
+                self.file_import = pd.read_csv(self.filename)
+                return True
+            raise FileNotFoundError
         except FileNotFoundError:
-            print('File not found')
+            print("ERROR: Please provide a working CSV file")
             return False
+
+    def close_file(self):
+        self.connection.close()
 
     def convert_file(self):
         """
         This function converts the user's CSV file into a SQL table
         """
         if self.file_import is None:
+            print("ERROR: Please provide a working CSV file")
             raise FileNotFoundError
 
         conn = self.connection
@@ -118,7 +125,9 @@ class FlowerDataBase:
                 sale_date = dt.date(year, month, day)
                 self._add_sale(sale_date=sale_date,
                                sales=sales_over_time,
+                               year=year,
                                specify_year=specify_year)
+
             self._visualize_report(sales=sales_over_time,
                                    specify_year=specify_year,
                                    interval="Daily")
@@ -142,47 +151,79 @@ class FlowerDataBase:
                 first_of_month = dt.datetime(year, month, 1)
                 self._add_sale(sale_date=first_of_month,
                                sales=monthly_sales,
+                               year=year,
                                specify_year=specify_year)
 
             self._visualize_report(sales=monthly_sales,
                                    specify_year=specify_year,
                                    interval="Monthly")
 
-    def _visualize_report(self, sales: dict, specify_year: int, interval: str):
-        """
-        Helper function for creating reports that basically edits the title
-        of the sales table given the specify_year and time interval
+    def quarterly_report(self, specify_year=None, client_history=None):
+        """Uses visualize_sales() function to visualize quarterly
+        data of sales"""
 
-        Exception is raised when the year specified does not have
-        matching data
-        """
-        if len(sales) > 0 and specify_year is not None:
-            self._visualize_sales(sales, f"{specify_year} {interval}")
-        elif len(sales) > 0 and specify_year is None:
-            self._visualize_sales(sales, f"{interval}")
-        else:
-            raise DataNotFound()
-
-    @staticmethod
-    def _add_sale(sale_date: dt.date, sales: dict, specify_year: int):
-        """
-        Helper function for creating reports for sales
-        Updates given sales dictionary using (key: value) pair of
-        (date: number of sales)
-        Updates the sales dictionary based on the year specified by user
-        """
-        year = sale_date.year
-        if specify_year is not None:
-            if year == specify_year:
-                if sale_date not in sales:
-                    sales[sale_date] = 1
-                else:
-                    sales[sale_date] += 1
-        else:
-            if sale_date not in sales:
-                sales[sale_date] = 1
+        with self.connection as con:
+            quarterly_sales = {"Q1": 0
+                , "Q2": 0
+                , "Q3": 0
+                , "Q4": 0}
+            if client_history is None:
+                rows = self._fetch_table(con)
             else:
-                sales[sale_date] += 1
+                rows = client_history
+            # populate dictionary with date values
+            for row in rows:
+                sale_date = dt.datetime.strptime(row[5], '%Y-%m-%d').date()
+                month = sale_date.month
+                year = sale_date.year
+                first_of_month = dt.datetime(year, month, 1)
+                if 1 <= month <= 3:
+                    self._add_sale(sale_date="Q2",
+                                   sales=quarterly_sales,
+                                   year=year,
+                                   specify_year=specify_year)
+                elif 4 <= month <= 6:
+                    self._add_sale(sale_date="Q2",
+                                   sales=quarterly_sales,
+                                   year=year,
+                                   specify_year=specify_year)
+                elif 7 <= month <= 9:
+                    self._add_sale(sale_date="Q3",
+                                   sales=quarterly_sales,
+                                   year=year,
+                                   specify_year=specify_year)
+                elif 10 <= month <= 12:
+                    self._add_sale(sale_date="Q4",
+                                   sales=quarterly_sales,
+                                   year=year,
+                                   specify_year=specify_year)
+                else:
+                    raise DataNotFound()
+
+            self._visualize_report(sales=quarterly_sales,
+                                   specify_year=specify_year,
+                                   interval="Quarterly")
+
+    def yearly_report(self, specify_year=None, client_history=None):
+        """Uses visualize_sales() function to visualize yearly data"""
+        with self.connection as con:
+            yearly_sales = {}
+            if client_history is None:
+                rows = self._fetch_table(con)
+            else:
+                rows = client_history
+            # populate dictionary with date values
+            for row in rows:
+                sale_date = dt.datetime.strptime(row[5], '%Y-%m-%d').date()
+                year = sale_date.year
+                self._add_sale(sale_date=str(year),
+                               sales=yearly_sales,
+                               year=year,
+                               specify_year=specify_year)
+
+            self._visualize_report(sales=yearly_sales,
+                                   specify_year=specify_year,
+                                   interval="Yearly")
 
     def look_up_client(self, client_search: str, time_interval="daily",
                        specify_year=None):
@@ -200,27 +241,59 @@ class FlowerDataBase:
             if time_interval == 'monthly':
                 self.monthly_report(client_history=client_history,
                                     specify_year=specify_year)
+            elif time_interval == 'quarterly':
+                self.quarterly_report(client_history=client_history,
+                                      specify_year=specify_year)
             else:
                 self.daily_report(client_history=client_history,
                                   specify_year=specify_year)
+
             return client_history
-
-    def quarterly_report(self):
-        """Uses visualize_sales() function to visualize quarterly
-        data of sales"""
-        pass
-
-    def yearly_report(self):
-        """Uses visualize_sales() function to visualize yearly data"""
-        pass
 
     def add_new_sale(self):
         """Queries DB for sales data and adds new sale(s)
         Linked list of sales(s)?"""
         pass
 
+    def _visualize_report(self, sales: dict, specify_year: int, interval: str):
+        """
+        Helper function for creating reports that basically edits the title
+        of the sales table given the specify_year and time interval
+
+        Exception is raised when the year specified does not have
+        matching data
+        """
+        if len(sales) > 0 and specify_year is not None:
+            self._visualize_sales(sales, f"{specify_year} {interval}")
+        elif len(sales) > 0 and specify_year is None:
+            self._visualize_sales(sales, f"{interval}")
+        else:
+            raise DataNotFound()
+
+    @staticmethod
+    def _add_sale(sale_date, sales: dict,
+                  year: int, specify_year: int):
+        """
+        Helper function for creating reports for sales
+        Updates given sales dictionary using (key: value) pair of
+        (date: number of sales)
+        Updates the sales dictionary based on the year specified by user
+        """
+        if specify_year is not None:
+            if year == specify_year:
+                if sale_date not in sales:
+                    sales[sale_date] = 1
+                else:
+                    sales[sale_date] += 1
+        else:
+            if sale_date not in sales:
+                sales[sale_date] = 1
+            else:
+                sales[sale_date] += 1
+
     @staticmethod
     def _fetch_table(con):
+        """Fetches flowershopdata SQL table"""
         cur = con.cursor()
         cur.execute('SELECT * FROM flowershopdata')
         return cur.fetchall()
@@ -237,9 +310,11 @@ class FlowerDataBase:
         # defining width of bars in bar graph
         total_dates = len(dates)
         bar_width = 0.8
-        if total_dates < 12:
+        if total_dates < 5:  # identifies quarterly period, will need to refactor this later
+            bar_width = 1
+        elif total_dates < 13:  # basically for months
             bar_width = 5
-        elif total_dates < 25:
+        elif total_dates < 25:  # daily
             bar_width = 3
 
         # set labels
@@ -277,11 +352,14 @@ def main():
     file = FlowerDataBase('flowershopdata.csv')
     file.import_file()
     file.convert_file()
-    file.daily_report()
+    #file.daily_report()
     #file.monthly_report()
-    #print(file.look_up_client("Izaiah Levine",
-                              #time_interval="monthly",
-                              #specify_year=2016))
+    '''print(file.look_up_client("Izaiah Levine",
+                              time_interval="quarterly",
+                              specify_year=2016))'''
+    #file.quarterly_report(2016)
+    file.yearly_report(2016)
+    file.close_file()
 
 
 if __name__ == '__main__':
