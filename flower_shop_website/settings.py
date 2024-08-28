@@ -38,6 +38,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'flower_shop_website.apps.accounts'
 ]
 
 MIDDLEWARE = [
@@ -125,9 +126,9 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Login redirection
 
-LOGIN_URL = "login"
-LOGIN_REDIRECT_URL = "index"
+LOGIN_URL = "accounts:login"
+LOGIN_REDIRECT_URL = "public:index"
 
 # Logout redirection
 
-LOGOUT_REDIRECT_URL = "index"
+LOGOUT_REDIRECT_URL = "public:index"
