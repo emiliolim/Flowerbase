@@ -4,7 +4,7 @@ Emilio Lim
 This module will be the test suite for the flower shop module
 """
 import unittest
-from flowershop import *
+from flower_database_backend.flowershop import *
 
 
 class FlowerShopTest(unittest.TestCase):
@@ -12,7 +12,8 @@ class FlowerShopTest(unittest.TestCase):
         """
         A test fixture that creates an instance of FlowerShopTest
         """
-        self.file = FlowerDataBase('flowershopdata.csv')
+        self.file = FlowerDataBase(
+            'flowershopdata.csv')
 
     def test_import_file_raises_exception_with_invalid_file(self):
         failed_file = FlowerDataBase(filename='test.csv')
