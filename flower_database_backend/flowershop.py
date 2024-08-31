@@ -1,8 +1,7 @@
 """
 Emilio Lim
 8/7/24
-Python 3.6.2
-Latest version of Matplotlib, Pandas, and SQLite3
+Python 3.9
 
 This is my first attempt at creating a flower shop
 app from scratch
@@ -22,6 +21,7 @@ base for the functions I will create
 Note for future self: create unit tests for remaining functions
 
 """
+from numpy import *
 from datetime import date
 from os import path
 
@@ -42,6 +42,7 @@ class DataNotFound(Exception):
         message = f"No data is found for the given parameters"
         super().__init__(message)
 
+
 class ImproperDataFormat(Exception):
     def __init__(self):
         message = "Improper data format within the given parameters"
@@ -52,7 +53,8 @@ class ImproperDataFormat(Exception):
 class FlowerDataBase:
     filename: str = None
     file_import: pd.DataFrame = None
-    connection: sql.Connection = sql.connect('flowershopdata.sqlite')
+    connection: sql.Connection = sql.connect(
+        'flowershopdata.sqlite')
 
     def import_file(self):
         """
@@ -383,16 +385,16 @@ def main():
     file = FlowerDataBase('flowershopdata.csv')
     file.import_file()
     file.convert_file()
-    #file.daily_report()
+    file.daily_report()
     #file.monthly_report()
-    print(file.look_up_client("Izaiah Levine",
+    '''print(file.look_up_client("Izaiah Levine",
                               time_interval="yearly",
-                              specify_year=2016))
+                              specify_year=2016))'''
     #file.quarterly_report(2016)
     #file.yearly_report(2016)
-    file.add_new_sale("Poppy", "A poppy", "Needs well drained soil",
+    '''file.add_new_sale("Poppy", "A poppy", "Needs well drained soil",
                       "Blooms mid Spring", "Sold", dt.date(2016, 4, 14),
-                      "Meep Moop", "(800) 888-8888")
+                      "Meep Moop", "(800) 888-8888")'''
     file.close_file()
 
 

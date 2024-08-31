@@ -1,6 +1,4 @@
-Django==3.2.25
-dataclasses==0.8
-matplotlib==3.3.4
-pandas==1.1.5
-numpy==1.19.5
-sqlparse==0.4.4
+Django==4.2.15
+matplotlib==3.7
+pandas==2.0.0
+numpy==1.26.4
